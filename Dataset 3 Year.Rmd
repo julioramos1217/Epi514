@@ -1,0 +1,192 @@
+---
+title: "Data Cleaning 3 Year"
+author: "Julio"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+
+```{r}
+## (a)
+library(haven)
+library(dplyr)
+library(lubridate)
+library(stringr)
+
+## Data saving (commented out) and csv loading 
+#LLCP2016 <- read_xpt("LLCP2016.XPT")
+#write.csv(LLCP2016, file = "LLCP2016")
+#LLCP2016 <- read.csv("LLCP2016")
+
+#LLCP2018 <- read_xpt("LLCP2018.XPT")
+#write.csv(LLCP2018, file = "LLCP2018")
+#LLCP2018 <- read.csv("LLCP2018")
+
+#LLCP2020 <- read_xpt("LLCP2020.XPT")
+#write.csv(LLCP2020, file = "LLCP2020")
+#LLCP2020 <- read.csv("LLCP2020")
+
+colnames(LLCP2016)
+## gotta make sure the time zone is correct, and other things
+LLCP2016$datetime <- paste0(LLCP2016$IMONTH,"-", LLCP2016$IDAY, "-", LLCP2016$IYEAR)
+LLCP2016$date <- as.Date(LLCP2016$datetime, format = c("%M-%d-%Y"))
+
+## I will recycle this variable (also month is not correct just yet)
+startpandemic <- as.Date("04-14-2016", format = "%M-%d-%Y")
+tester1 <- subset(LLCP2016, LLCP2016$date > startpandemic)
+
+LLCP2018$datetime <- paste0(LLCP2018$IMONTH,"-", LLCP2018$IDAY, "-", LLCP2018$IYEAR)
+LLCP2018$date <- as.Date(LLCP2018$datetime, format = c("%M-%d-%Y"))
+startpandemic <- as.Date("04-14-2018", format = "%M-%d-%Y")
+tester2 <- subset(LLCP2018, LLCP2018$date > startpandemic)
+
+LLCP2020$datetime <- paste0(LLCP2020$IMONTH,"-", LLCP2020$IDAY, "-", LLCP2020$IYEAR)
+LLCP2020$date <- as.Date(LLCP2020$datetime, format = c("%M-%d-%Y"))
+startpandemic <- as.Date("04-14-2020", format = "%M-%d-%Y")
+tester3 <- subset(LLCP2020, LLCP2020$date > startpandemic)
+
+check1 <- colnames(LLCP2016)
+check2 <- colnames(LLCP2018)
+check3 <- colnames(LLCP2020)
+
+## gonna try old fashioned way of subsetting variables we want
+tester1 <- tester1[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date")]
+tester2 <- tester2[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date")]
+tester3 <- tester3[, c("DIABETE4", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date")]
+
+## rename diabetes variable to same thing
+tester1 <- rename(tester1, diabetes = DIABETE3)
+tester2 <- rename(tester2, diabetes = DIABETE3)
+tester3 <- rename(tester3, diabetes = DIABETE4)
+
+## combine data
+testercomplete <- rbind(tester1, tester2, tester3)
+testercomplete <- rbind(tester1, tester2)
+testercomplete <- rbind(testercomplete, tester3)
+```
+
+## Data Cleaning
+```{r}
+testercomplete$HEIGHT3[testercomplete$HEIGHT3 == 99 | testercomplete$HEIGHT3 == 77] <- NA
+
+testercomplete$WEIGHT2[testercomplete$WEIGHT2 == 9999 | testercomplete$WEIGHT2 == 7777] <- NA
+
+
+weightcalc<- function(weight) {
+    if(weight %in% 49:0777) {
+       return(weight)
+} else if (weight %in% 9022:9353) {
+       return((weight - 9000)*2.2)
+} else {
+  return(NA)
+}
+}
+
+testercomplete$newweight <- sapply(testercomplete$WEIGHT2, function(x) weightcalc(x)) 
+
+heightcalc<- function(height) {
+    if(height %in% 199:712) {
+       return((((height %/% 100) * 12) + (height %% 100)))
+} else if (height %in% 9061:9998) {
+       return((height - 9000)/2.54)
+} else {
+  return(NA)
+}
+}
+## be careful for outliers and wrongly inputted data
+## there are also A LOT of implausible looking values - Hafsa what you think?
+testercomplete$newheight <- sapply(testercomplete$HEIGHT3, function(x) heightcalc(x)) 
+
+## New weight is now in pounds!
+testercomplete <- testercomplete %>% 
+  mutate(bmi = (newweight / newheight^2) *703)
+
+## New diabetes variable named diabebin
+testercomplete$diabebin[testercomplete$diabetes == 9 | testercomplete$diabetes == 7] <- NA
+testercomplete$diabebin[testercomplete$diabetes %in% 2:4] <- 0
+testercomplete$diabebin[testercomplete$diabetes == 1] <- 1
+testercomplete$diabebin <- factor(testercomplete$diabebin,
+                               levels = 0:1,
+                               labels = c("No Diabetes", "Diabetes"))
+
+## New high bmi variable named bmihigh
+testercomplete$bmihigh[testercomplete$bmi >= 25] <- 1
+testercomplete$bmihigh[testercomplete$bmi < 25] <- 0
+testercomplete$bmihigh <- factor(testercomplete$bmihigh,
+                               levels = 0:1,
+                               labels = c("BMI < 25", "BMI ≥ 25"))
+
+
+## factored interview year variable
+testercomplete$year <- factor(testercomplete$IYEAR,
+                               levels = 2016:2021,
+                               labels = c("2016", "2017", "2018", "2019", "2020", "2021"))
+
+## New CVD variable named cvdbin
+testercomplete$cvdbin[testercomplete$CVDCRHD4 == 9 | testercomplete$CVDCRHD4 == 7] <- NA
+testercomplete$cvdbin[testercomplete$CVDCRHD4 == 2] <- 0
+testercomplete$cvdbin[testercomplete$CVDCRHD4 == 1] <- 1
+testercomplete$cvdbin <- factor(testercomplete$cvdbin,
+                               levels = 0:1,
+                               labels = c("No CVD", "CVD"))
+
+## New PA variable named activbin
+testercomplete$activbin[testercomplete$X_TOTINDA == 9 | testercomplete$X_TOTINDA == 7] <- NA
+testercomplete$activbin[testercomplete$X_TOTINDA == 2] <- 0
+testercomplete$activbin[testercomplete$X_TOTINDA == 1] <- 1
+testercomplete$activbin <- factor(testercomplete$activbin,
+                               levels = 0:1,
+                               labels = c("No Activity", "Some Activity"))
+```
+
+
+## Creating the Table (nonsense code right now)
+```{r}
+library(tableone)
+library(gtsummary)
+
+## Below is Mimi's code
+# myvars <- c("_age_g", "sex")
+# 
+# table1PA <- CreateTableOne (vars = myvars, strata = "smoker3", data = data, factorVars = myvars, includeNA = TRUE)
+# print(table1a, showAllLevels = TRUE)
+
+myvars <- c("diabetes", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date")
+table1a <- CreateTableOne(vars = myvars,
+                         strata="IYEAR",
+                         data=testercomplete,
+                         factorVars = myvars,
+                         includeNA = FALSE)
+print(table1a, showAllLevels = TRUE)
+#summary(testercomplete)
+# 
+# #myvars1 <- c("diabetes", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR")
+
+## Table with all variables (maybe not use)
+testercomplete %>% select(diabebin, HEIGHT3, WEIGHT2, cvdbin, activbin, year, date, bmihigh) %>%
+ tbl_summary(by = "year",missing = "ifany",
+ digits = list(all_categorical() ~ c(0,1)), 
+ label = list(diabebin ~ "Diabetes",
+              HEIGHT3 ~ "Height",
+              WEIGHT2 ~ "Weight",
+              cvdbin ~ "CVD", 
+              activbin ~ "Physical Activity",
+              year ~ "Year", 
+              date ~ "Date",
+              bmihigh = "BMI ≥ 25")) %>%
+ modify_header(label = "**Variable**")
+
+## Table with necessary variables
+testercomplete %>% select(diabebin, cvdbin, activbin, year, bmihigh) %>%
+ tbl_summary(by = "year",missing = "ifany",
+ digits = list(all_categorical() ~ c(0,1)), 
+ label = list(diabebin ~ "Diabetes",
+              cvdbin ~ "CVD", 
+              activbin ~ "Physical Activity",
+              year ~ "Year", 
+              bmihigh = "BMI ≥ 25")) %>%
+ modify_header(label = "**Variable**") %>%
+  modify_caption("**Table 1. National Characteristics Based on BRFSS Interview Year**") %>%
+  bold_labels() 
+```
+
