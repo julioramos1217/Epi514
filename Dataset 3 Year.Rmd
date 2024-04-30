@@ -33,6 +33,7 @@ LLCP2016$date <- as.Date(LLCP2016$datetime, format = c("%M-%d-%Y"))
 
 ## I will recycle this variable (also month is not correct just yet)
 startpandemic <- as.Date("04-14-2016", format = "%M-%d-%Y")
+endyear <- as.Date("10-29-2016", format = "%M-%d-%Y")
 tester1 <- subset(LLCP2016, LLCP2016$date > startpandemic)
 
 LLCP2018$datetime <- paste0(LLCP2018$IMONTH,"-", LLCP2018$IDAY, "-", LLCP2018$IYEAR)
@@ -50,17 +51,35 @@ check2 <- colnames(LLCP2018)
 check3 <- colnames(LLCP2020)
 
 ## gonna try old fashioned way of subsetting variables we want
-tester1 <- tester1[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date")]
-tester2 <- tester2[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date")]
-tester3 <- tester3[, c("DIABETE4", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date")]
+# tester1 <- tester1[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",
+#                        "X_HISPANC", "SEX")]
+# tester2 <- tester2[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",                        "X_HISPANC", "SEX")]
+# tester3 <- tester3[, c("DIABETE4", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",                        "X_HISPANC", "SEX")]
+
+tester1 <- subset(LLCP2016, X_HISPANC == 1)
+tester2 <- subset(LLCP2018, X_HISPANC == 1)
+tester3 <- subset(LLCP2020, X_HISPANC == 1)
+
+tester1 <- tester1[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",
+                       "X_HISPANC", "SEX", "X_AGE_G")]
+tester2 <- tester2[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",
+                       "X_HISPANC", "SEX1", "X_AGE_G")]
+tester3 <- tester3[, c("DIABETE4", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",
+                       "X_HISPANC", "X_SEX", "X_AGE_G")]
+
+
 
 ## rename diabetes variable to same thing
 tester1 <- rename(tester1, diabetes = DIABETE3)
 tester2 <- rename(tester2, diabetes = DIABETE3)
 tester3 <- rename(tester3, diabetes = DIABETE4)
 
+## rename sex variable
+tester1 <- rename(tester1, sex = SEX)
+tester2 <- rename(tester2, sex = SEX1)
+tester3 <- rename(tester3, sex = X_SEX)
+
 ## combine data
-testercomplete <- rbind(tester1, tester2, tester3)
 testercomplete <- rbind(tester1, tester2)
 testercomplete <- rbind(testercomplete, tester3)
 ```
@@ -116,6 +135,10 @@ testercomplete$bmihigh <- factor(testercomplete$bmihigh,
                                levels = 0:1,
                                labels = c("BMI < 25", "BMI ≥ 25"))
 
+## 
+testercomplete$X_AGE_G <- factor(testercomplete$X_AGE_G,
+                               levels = 1:6,
+                               labels = c("18-24", "25-34", "35-44", "45-54", "55-64", "65+"))
 
 ## factored interview year variable
 testercomplete$year <- factor(testercomplete$IYEAR,
@@ -137,6 +160,14 @@ testercomplete$activbin[testercomplete$X_TOTINDA == 1] <- 1
 testercomplete$activbin <- factor(testercomplete$activbin,
                                levels = 0:1,
                                labels = c("No Activity", "Some Activity"))
+
+## sex variable
+testercomplete$sex[testercomplete$sex == 9 | testercomplete$sex == 7] <- NA
+testercomplete$sex[testercomplete$sex == 2] <- 2
+testercomplete$sex[testercomplete$sex == 1] <- 1
+testercomplete$sex <- factor(testercomplete$sex,
+                               levels = 1:2,
+                               labels = c("Male", "Female"))
 ```
 
 
@@ -177,16 +208,19 @@ testercomplete %>% select(diabebin, HEIGHT3, WEIGHT2, cvdbin, activbin, year, da
  modify_header(label = "**Variable**")
 
 ## Table with necessary variables
-testercomplete %>% select(diabebin, cvdbin, activbin, year, bmihigh) %>%
+testercomplete %>% select(diabebin, cvdbin, activbin, year, bmihigh, X_AGE_G, sex) %>%
  tbl_summary(by = "year",missing = "ifany",
  digits = list(all_categorical() ~ c(0,1)), 
  label = list(diabebin ~ "Diabetes",
               cvdbin ~ "CVD", 
               activbin ~ "Physical Activity",
               year ~ "Year", 
-              bmihigh = "BMI ≥ 25")) %>%
+              bmihigh ~ "BMI ≥ 25",
+              X_AGE_G ~ "Age Group",
+              sex ~ "Sex")) %>%
  modify_header(label = "**Variable**") %>%
-  modify_caption("**Table 1. National Characteristics Based on BRFSS Interview Year**") %>%
+  modify_caption("**Table 1. National Characteristics Among Latin Population for Physical Activity, Diabetes, Cardiovascular Disease, Body Mass Index, Age Group, Sex, Based on BRFSS Interview Years 2016-2021**") %>%
   bold_labels() 
+
 ```
 
