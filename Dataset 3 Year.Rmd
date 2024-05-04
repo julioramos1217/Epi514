@@ -14,51 +14,46 @@ library(lubridate)
 library(stringr)
 
 ## Data saving (commented out) and csv loading 
-#LLCP2016 <- read_xpt("LLCP2016.XPT")
-#write.csv(LLCP2016, file = "LLCP2016")
-#LLCP2016 <- read.csv("LLCP2016")
+# LLCP2016 <- read_xpt("LLCP2016.XPT")
+# write.csv(LLCP2016, file = "LLCP2016")
+# LLCP2016 <- read.csv("LLCP2016")
 
-#LLCP2018 <- read_xpt("LLCP2018.XPT")
-#write.csv(LLCP2018, file = "LLCP2018")
-#LLCP2018 <- read.csv("LLCP2018")
+# LLCP2018 <- read_xpt("LLCP2018.XPT")
+# write.csv(LLCP2018, file = "LLCP2018")
+# LLCP2018 <- read.csv("LLCP2018")
 
-#LLCP2020 <- read_xpt("LLCP2020.XPT")
-#write.csv(LLCP2020, file = "LLCP2020")
-#LLCP2020 <- read.csv("LLCP2020")
+# LLCP2020 <- read_xpt("LLCP2020.XPT")
+# write.csv(LLCP2020, file = "LLCP2020")
+# LLCP2020 <- read.csv("LLCP2020")
 
-colnames(LLCP2016)
-## gotta make sure the time zone is correct, and other things
 LLCP2016$datetime <- paste0(LLCP2016$IMONTH,"-", LLCP2016$IDAY, "-", LLCP2016$IYEAR)
-LLCP2016$date <- as.Date(LLCP2016$datetime, format = c("%M-%d-%Y"))
+LLCP2016$date <- as.Date(LLCP2016$datetime, format = c("%m-%d-%Y"))
 
-## I will recycle this variable (also month is not correct just yet)
-startpandemic <- as.Date("04-14-2016", format = "%M-%d-%Y")
-endyear <- as.Date("10-29-2016", format = "%M-%d-%Y")
+## I will recycle this variable to cut off jan-april (prepandemic)
+## NOTE: the data collected goes into Feb of the following year, not just Jan!
+startpandemic <- as.Date("04-14-2016", format = "%m-%d-%Y")
 tester1 <- subset(LLCP2016, LLCP2016$date > startpandemic)
 
 LLCP2018$datetime <- paste0(LLCP2018$IMONTH,"-", LLCP2018$IDAY, "-", LLCP2018$IYEAR)
-LLCP2018$date <- as.Date(LLCP2018$datetime, format = c("%M-%d-%Y"))
-startpandemic <- as.Date("04-14-2018", format = "%M-%d-%Y")
+LLCP2018$date <- as.Date(LLCP2018$datetime, format = c("%m-%d-%Y"))
+startpandemic <- as.Date("04-14-2018", format = "%m-%d-%Y")
 tester2 <- subset(LLCP2018, LLCP2018$date > startpandemic)
 
 LLCP2020$datetime <- paste0(LLCP2020$IMONTH,"-", LLCP2020$IDAY, "-", LLCP2020$IYEAR)
-LLCP2020$date <- as.Date(LLCP2020$datetime, format = c("%M-%d-%Y"))
-startpandemic <- as.Date("04-14-2020", format = "%M-%d-%Y")
+LLCP2020$date <- as.Date(LLCP2020$datetime, format = c("%m-%d-%Y"))
+startpandemic <- as.Date("04-14-2020", format = "%m-%d-%Y")
 tester3 <- subset(LLCP2020, LLCP2020$date > startpandemic)
 
-check1 <- colnames(LLCP2016)
-check2 <- colnames(LLCP2018)
-check3 <- colnames(LLCP2020)
 
-## gonna try old fashioned way of subsetting variables we want
+i## gonna try old fashioned way of subsetting variables we want
 # tester1 <- tester1[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",
 #                        "X_HISPANC", "SEX")]
 # tester2 <- tester2[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",                        "X_HISPANC", "SEX")]
 # tester3 <- tester3[, c("DIABETE4", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",                        "X_HISPANC", "SEX")]
 
-tester1 <- subset(LLCP2016, X_HISPANC == 1)
-tester2 <- subset(LLCP2018, X_HISPANC == 1)
-tester3 <- subset(LLCP2020, X_HISPANC == 1)
+tester1 <- subset(tester1, X_HISPANC == 1)
+tester2 <- subset(tester2, X_HISPANC == 1)
+tester3 <- subset(tester3, X_HISPANC == 1)
 
 tester1 <- tester1[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",
                        "X_HISPANC", "SEX", "X_AGE_G")]
@@ -120,6 +115,14 @@ testercomplete$newheight <- sapply(testercomplete$HEIGHT3, function(x) heightcal
 testercomplete <- testercomplete %>% 
   mutate(bmi = (newweight / newheight^2) *703)
 
+testercomplete$bmicat[testercomplete$bmi < 18.5] <- 1
+testercomplete$bmicat[testercomplete$bmi >= 18.5 & testercomplete$bmi < 25] <- 2
+testercomplete$bmicat[testercomplete$bmi >= 25 & testercomplete$bmi < 30] <- 3
+testercomplete$bmicat[testercomplete$bmi >= 30] <- 4
+testercomplete$bmicat <- factor(testercomplete$bmicat,
+                               levels = 1:4,
+                               labels = c("<18.5", "18.5-24", "25-29", "≥30"))
+
 ## New diabetes variable named diabebin
 testercomplete$diabebin[testercomplete$diabetes == 9 | testercomplete$diabetes == 7] <- NA
 testercomplete$diabebin[testercomplete$diabetes %in% 2:4] <- 0
@@ -144,6 +147,14 @@ testercomplete$X_AGE_G <- factor(testercomplete$X_AGE_G,
 testercomplete$year <- factor(testercomplete$IYEAR,
                                levels = 2016:2021,
                                labels = c("2016", "2017", "2018", "2019", "2020", "2021"))
+
+## Combined year variable
+testercomplete$yearsurv[testercomplete$year %in% 2016:2017] <- 1
+testercomplete$yearsurv[testercomplete$year %in% 2018:2019] <- 2
+testercomplete$yearsurv[testercomplete$year %in% 2020:2021] <- 3
+testercomplete$yearsurv <- factor(testercomplete$yearsurv,
+                               levels = 1:3,
+                               labels = c("2016", "2018", "2020"))
 
 ## New CVD variable named cvdbin
 testercomplete$cvdbin[testercomplete$CVDCRHD4 == 9 | testercomplete$CVDCRHD4 == 7] <- NA
@@ -173,25 +184,7 @@ testercomplete$sex <- factor(testercomplete$sex,
 
 ## Creating the Table (nonsense code right now)
 ```{r}
-library(tableone)
 library(gtsummary)
-
-## Below is Mimi's code
-# myvars <- c("_age_g", "sex")
-# 
-# table1PA <- CreateTableOne (vars = myvars, strata = "smoker3", data = data, factorVars = myvars, includeNA = TRUE)
-# print(table1a, showAllLevels = TRUE)
-
-myvars <- c("diabetes", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date")
-table1a <- CreateTableOne(vars = myvars,
-                         strata="IYEAR",
-                         data=testercomplete,
-                         factorVars = myvars,
-                         includeNA = FALSE)
-print(table1a, showAllLevels = TRUE)
-#summary(testercomplete)
-# 
-# #myvars1 <- c("diabetes", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR")
 
 ## Table with all variables (maybe not use)
 testercomplete %>% select(diabebin, HEIGHT3, WEIGHT2, cvdbin, activbin, year, date, bmihigh) %>%
@@ -208,18 +201,17 @@ testercomplete %>% select(diabebin, HEIGHT3, WEIGHT2, cvdbin, activbin, year, da
  modify_header(label = "**Variable**")
 
 ## Table with necessary variables
-testercomplete %>% select(diabebin, cvdbin, activbin, year, bmihigh, X_AGE_G, sex) %>%
- tbl_summary(by = "year",missing = "ifany",
+table1 <- testercomplete %>% select(yearsurv, sex, X_AGE_G, diabebin, cvdbin, bmicat, activbin) %>%
+ tbl_summary(by = "yearsurv",missing = "ifany",
  digits = list(all_categorical() ~ c(0,1)), 
- label = list(diabebin ~ "Diabetes",
-              cvdbin ~ "CVD", 
-              activbin ~ "Physical Activity",
-              year ~ "Year", 
-              bmihigh ~ "BMI ≥ 25",
+ label = list(sex ~ "Sex",
               X_AGE_G ~ "Age Group",
-              sex ~ "Sex")) %>%
+              diabebin ~ "Diabetes",
+              cvdbin ~ "Cardiovascular Diesease", 
+              bmicat ~ "BMI Category",
+              activbin ~ "Physical Activity")) %>%
  modify_header(label = "**Variable**") %>%
-  modify_caption("**Table 1. National Characteristics Among Latin Population for Physical Activity, Diabetes, Cardiovascular Disease, Body Mass Index, Age Group, Sex, Based on BRFSS Interview Years 2016-2021**") %>%
+  modify_caption("**Table 1. National Characteristics Among Latin Population for Physical Activity, Diabetes, Cardiovascular Disease, Body Mass Index, Age Group, Sex, Based on BRFSS Interview Years 2016, 2018 & 2020**") %>%
   bold_labels() 
 
 ```
