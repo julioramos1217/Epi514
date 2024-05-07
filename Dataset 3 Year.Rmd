@@ -16,15 +16,15 @@ library(stringr)
 ## Data saving (commented out) and csv loading 
 # LLCP2016 <- read_xpt("LLCP2016.XPT")
 # write.csv(LLCP2016, file = "LLCP2016")
-# LLCP2016 <- read.csv("LLCP2016")
+LLCP2016 <- read.csv("LLCP2016")
 
 # LLCP2018 <- read_xpt("LLCP2018.XPT")
 # write.csv(LLCP2018, file = "LLCP2018")
-# LLCP2018 <- read.csv("LLCP2018")
+LLCP2018 <- read.csv("LLCP2018")
 
 # LLCP2020 <- read_xpt("LLCP2020.XPT")
 # write.csv(LLCP2020, file = "LLCP2020")
-# LLCP2020 <- read.csv("LLCP2020")
+LLCP2020 <- read.csv("LLCP2020")
 
 LLCP2016$datetime <- paste0(LLCP2016$IMONTH,"-", LLCP2016$IDAY, "-", LLCP2016$IYEAR)
 LLCP2016$date <- as.Date(LLCP2016$datetime, format = c("%m-%d-%Y"))
@@ -45,12 +45,6 @@ startpandemic <- as.Date("04-14-2020", format = "%m-%d-%Y")
 tester3 <- subset(LLCP2020, LLCP2020$date > startpandemic)
 
 
-i## gonna try old fashioned way of subsetting variables we want
-# tester1 <- tester1[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",
-#                        "X_HISPANC", "SEX")]
-# tester2 <- tester2[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",                        "X_HISPANC", "SEX")]
-# tester3 <- tester3[, c("DIABETE4", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",                        "X_HISPANC", "SEX")]
-
 tester1 <- subset(tester1, X_HISPANC == 1)
 tester2 <- subset(tester2, X_HISPANC == 1)
 tester3 <- subset(tester3, X_HISPANC == 1)
@@ -61,7 +55,6 @@ tester2 <- tester2[, c("DIABETE3", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA"
                        "X_HISPANC", "SEX1", "X_AGE_G")]
 tester3 <- tester3[, c("DIABETE4", "HEIGHT3", "WEIGHT2", "CVDCRHD4", "X_TOTINDA", "IYEAR", "date",
                        "X_HISPANC", "X_SEX", "X_AGE_G")]
-
 
 
 ## rename diabetes variable to same thing
@@ -179,10 +172,18 @@ testercomplete$sex[testercomplete$sex == 1] <- 1
 testercomplete$sex <- factor(testercomplete$sex,
                                levels = 1:2,
                                labels = c("Male", "Female"))
+
+## Age cutoff variable 
+testercomplete <- testercomplete %>% 
+  mutate(agecat = case_when(X_AGE_G == "18-24" | X_AGE_G == "25-34" |X_AGE_G == "35-44" ~ 1,
+                            X_AGE_G == "45-54" | X_AGE_G == "55-64" |X_AGE_G == "65+" ~ 2))
+testercomplete$agecat <- factor(testercomplete$agecat,
+                               levels = 1:2,
+                               labels = c("<45", "45+"))
 ```
 
 
-## Creating the Table (nonsense code right now)
+## Creating the Table 
 ```{r}
 library(gtsummary)
 
@@ -215,4 +216,157 @@ table1 <- testercomplete %>% select(yearsurv, sex, X_AGE_G, diabebin, cvdbin, bm
   bold_labels() 
 
 ```
+
+
+## Analysis for Table 2
+```{r}
+library(epiR)
+install.packages("exact2x2")
+library(exact2x2)
+
+## this is for confounding only (prob need to input more confounders later)
+
+## The way I am creating this variable is omitting one year (this one omits 2020)
+testercomplete <- testercomplete %>% mutate(
+  yearcont = case_when(
+    yearsurv == 2016 ~ 1,
+    yearsurv == 2018 ~ 2,
+    yearsurv == 2020 ~ NA,
+    TRUE ~ NA_real_)) # catch-all condition for any other values
+testercomplete$yearcont <- factor(testercomplete$yearcont,
+                          levels = c(1, 2, NA),
+                          labels = c("2016",
+                                     "2018")) 
+testercomplete <- testercomplete %>% mutate(
+  yearcase = case_when(
+    yearsurv == 2016 ~ 1,
+    yearsurv == 2018 ~ NA,
+    yearsurv == 2020 ~ 2,
+    TRUE ~ NA_real_)) # catch-all condition for any other values
+testercomplete$yearcase <- factor(testercomplete$yearcase,
+                          levels = c(1, 2, NA),
+                          labels = c("2016",
+                                     "2020")) 
+
+strat1 <- xtabs(~yearcont + activbin + sex + agecat, data = testercomplete)
+strat2 <- xtabs(~yearcase + activbin + sex + agecat, data = testercomplete)
+
+#array_1 <- array(strat_1,
+array1 <- array(strat1,
+               dim = c(2,2,4),
+               list(exposure = c(2016, 2018),
+                    outcomes = c('No Activity', 'Some Activity'),
+                    confounders = 1:4))
+array2 <- array(strat2,
+               dim = c(2,2,4),
+               list(exposure = c(2016, 2020),
+                    outcomes = c('No Activity', 'Some Activity'),
+                    confounders = 1:4))
+
+epi.2by2(array1, method = 'cross.sectional')
+epi.2by2(array2, method = 'cross.sectional')
+
+
+## For effect modification of BMI
+
+strat_bmihigh_1 <- xtabs(~yearcont + activbin + sex + agecat, data = testercomplete, subset = bmihigh == "BMI < 25")
+strat_bmilow_1 <- xtabs(~yearcont + activbin + sex + agecat, data = testercomplete, subset = bmihigh == "BMI ≥ 25")
+
+strat_bmihigh_2 <- xtabs(~yearcase + activbin + sex + agecat, data = testercomplete, subset = bmihigh == "BMI < 25")
+strat_bmilow_2 <- xtabs(~yearcase + activbin + sex + agecat, data = testercomplete, subset = bmihigh == "BMI ≥ 25")
+
+array_bmihigh_1 <- array(strat_bmihigh_1,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2018),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+array_bmilow_1 <- array(strat_bmilow_1,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2018),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+array_bmihigh_2 <- array(strat_bmihigh_2,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2020),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+array_bmilow_2 <- array(strat_bmilow_2,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2020),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+
+
+
+epi.2by2(array_bmihigh_1, method = 'cross.sectional')
+epi.2by2(array_bmilow_1, method = 'cross.sectional')
+epi.2by2(array_bmihigh_2, method = 'cross.sectional')
+epi.2by2(array_bmilow_2, method = 'cross.sectional')
+
+
+## Diabetes Effect Modification
+strat_Diabn_1 <- xtabs(~yearcont + activbin + sex + agecat, data = testercomplete, subset = diabebin == "No Diabetes")
+strat_Diaby_1 <- xtabs(~yearcont + activbin + sex + agecat, data = testercomplete, subset = diabebin == "Diabetes")
+strat_Diabn_2 <- xtabs(~yearcase + activbin + sex + agecat, data = testercomplete, subset = diabebin == "No Diabetes")
+strat_Diaby_2 <- xtabs(~yearcase + activbin + sex + agecat, data = testercomplete, subset = diabebin == "Diabetes")
+array_Diabn_1 <- array(strat_Diabn_1,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2018),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+array_Diaby_1 <- array(strat_Diaby_1,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2018),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+array_Diabn_2 <- array(strat_Diabn_2,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2020),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+array_Diaby_2 <- array(strat_Diaby_2,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2020),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+
+epi.2by2(array_Diabn_1, method = 'cross.sectional')
+epi.2by2(array_Diaby_1, method = 'cross.sectional')
+epi.2by2(array_Diabn_2, method = 'cross.sectional')
+epi.2by2(array_Diaby_2, method = 'cross.sectional')
+
+
+## Effect Modification for CVD
+strat_CVDn_1 <- xtabs(~yearcont + activbin + sex + agecat, data = testercomplete, subset = cvdbin == "No CVD")
+strat_CVDy_1 <- xtabs(~yearcont + activbin + sex + agecat, data = testercomplete, subset = cvdbin == "CVD")
+strat_CVDn_2 <- xtabs(~yearcase + activbin + sex + agecat, data = testercomplete, subset = cvdbin == "No CVD")
+strat_CVDy_2 <- xtabs(~yearcase + activbin + sex + agecat, data = testercomplete, subset = cvdbin == "CVD")
+
+array_CVDn_1 <- array(strat_CVDn_1,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2018),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+array_CVDy_1 <- array(strat_CVDy_1,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2018),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+array_CVDn_2 <- array(strat_CVDn_2,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2020),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+array_CVDy_2 <- array(strat_CVDy_2,
+                      dim = c(2,2,4),
+                      list(exposure = c(2016, 2020),
+                           outcomes = c('No Activity', 'Some Activity'),
+                           confounders = 1:4))
+epi.2by2(array_CVDn_1, method = 'cross.sectional')
+epi.2by2(array_CVDy_1, method = 'cross.sectional')
+epi.2by2(array_CVDn_2, method = 'cross.sectional')
+epi.2by2(array_CVDy_2, method = 'cross.sectional')
+```
+
+
 
